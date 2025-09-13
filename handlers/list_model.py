@@ -32,7 +32,7 @@ def get_master_keyboard(current: int, total: int, master_id: str) -> InlineKeybo
 
 @router.message(lambda m: m.text == "📋 List models")
 async def list_models(message: Message):
-    resp = requests.get(f"{API_URL}/masters/", headers=headers)
+    resp = requests.get(f"{API_URL}/masters/")
     resp.raise_for_status()
     global models_cache
     models_cache = resp.json()

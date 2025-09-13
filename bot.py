@@ -1,24 +1,32 @@
 import os
-import requests
 import asyncio
-from aiogram import Bot, Dispatcher, types, Router
-from aiogram.filters import Command
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+import requests
+from dotenv import load_dotenv
+from aiogram import Bot, Dispatcher,F
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
-from dotenv import load_dotenv
 
+from handlers.create_model import router as create_master_router
+from handlers.list_model import router as list_masters_router
+from handlers.start import router as start_router
+from handlers.edit_model import router as edit_router
+
+from aiogram.fsm.storage.memory import MemoryStorage
+
+# Загружаем .env
 load_dotenv()
-
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-API_URL = os.getenv("API_URL")
-API_KEY = os.getenv("API_KEY")
 
+# Настраиваем бота
 bot = Bot(
     token=BOT_TOKEN,
     default=DefaultBotProperties(parse_mode=ParseMode.HTML)
 )
-dp = Dispatcher()
-router = Router()
+dp = Dispatcher(storage=MemoryStorage())
+dp.include_router(start_router)
+dp.include_router(create_master_router)
+dp.include_router(list_masters_router)
+dp.include_router(edit_router)
 
-headers = {"X-API-Key": API_KEY}
+if __name__ == "__main__":
+  asyncio.run(dp.start_polling(bot))

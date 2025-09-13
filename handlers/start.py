@@ -6,16 +6,15 @@ import tempfile
 
 router = Router()
 
-# --- Главное меню ---
+# --- Main menu ---
 menu = ReplyKeyboardMarkup(
   keyboard=[
     [KeyboardButton(text="➕ Add model")],
     [KeyboardButton(text="📋 List models")],
-    [KeyboardButton(text="✏️ Change model")]
   ],
   resize_keyboard=True
 )
 
 @router.message(Command("start"))
 async def start(message: Message):
-    await message.answer("Привет 👋 Я бот для управления моделями!", reply_markup=menu)
+    await message.answer("Hello 👋 I am bot to manage models!", reply_markup=menu)
