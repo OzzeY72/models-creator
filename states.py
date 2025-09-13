@@ -13,3 +13,8 @@ class CreateMaster(StatesGroup):
     price_2h = State()
     price_full_day = State()
     photo = State()
+
+class EditMaster(StatesGroup):
+    view = State()
+    field = State()  
+    value = State()
