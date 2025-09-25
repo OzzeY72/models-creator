@@ -22,10 +22,10 @@ from aiogram.fsm.storage.memory import MemoryStorage
 # Загружаем .env
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-REDIS_HOST = os.getenv("REDIS_HOST")
+REDIS_URL = os.getenv("REDIS_URL")
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
 
-redis = aioredis.from_url("redis://localhost", decode_responses=True)
+redis = aioredis.from_url(REDIS_URL, decode_responses=True)
 
 async def redis_listener(bot: Bot):
     pubsub = redis.pubsub()
