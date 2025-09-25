@@ -1,0 +1,6 @@
+httpx
+aiogram
+python-dotenv
+requests
+redis
+aioredis

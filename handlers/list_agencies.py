@@ -1,0 +1,147 @@
+from aiogram import Router, F
+from aiogram.types import CallbackQuery, InputMediaPhoto, FSInputFile
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+import requests, tempfile
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from dotenv import load_dotenv
+from aiogram.fsm.context import FSMContext
+import os
+import tempfile
+from utils import format_agencyspa, format_master, preload_image, send_master_carousel
+
+load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+API_URL = os.getenv("API_URL")
+
+router = Router()
+models_cache = []
+
+def get_agencyspa_keyboard(current: int, total: int, agency_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="⬅️", callback_data=f"prev_agency:{current}"),
+                InlineKeyboardButton(text=f"{current+1}/{total}", callback_data="noop"),
+                InlineKeyboardButton(text="➡️", callback_data=f"next_agency:{current}"),
+            ],
+            [InlineKeyboardButton(text="Open", callback_data=f"open_spa:{agency_id}")]
+        ]
+    )
+
+@router.callback_query(F.data.startswith("open_spa"))
+async def open_spa_agency(callback: CallbackQuery, state: FSMContext):
+    _, spa_id = callback.data.split(":")
+    
+    # Получаем модели SPA/Agency
+    resp = requests.get(f"{API_URL}/masters/by_spa/{spa_id}/",)
+    if resp.status_code != 200:
+        await callback.answer("❌ Could not fetch models", show_alert=True)
+        return
+
+    masters = resp.json()
+    if not masters:
+        await callback.answer("📭 No models found", show_alert=True)
+        return
+
+    # Сохраняем в state
+    await state.update_data(search_results=masters)
+    await send_master_carousel(callback.message, masters, state, index=0)
+    await callback.answer()
+
+# @router.callback_query(F.data.startswith("prev"))
+# async def prev(callback: CallbackQuery, state: FSMContext):
+#     _, current = callback.data.split(":")
+#     current = int(current)
+#     data = await state.get_data()
+#     masters = data["search_results"]
+#     new_index = (current - 1) % len(masters)
+#     await send_master_carousel(callback.message, masters, state, new_index)
+#     await callback.answer()
+
+# @router.callback_query(F.data.startswith("next"))
+# async def next(callback: CallbackQuery, state: FSMContext):
+#     _, current = callback.data.split(":")
+#     current = int(current)
+#     data = await state.get_data()
+#     masters = data["search_results"]
+#     new_index = (current + 1) % len(masters)
+#     await send_master_carousel(callback.message, masters, state, new_index)
+#     await callback.answer()
+
+@router.callback_query(F.data.startswith("show_agencyspa"))
+async def list_agencyspa(callback: CallbackQuery):
+    print("SHOW AGENCY")
+    _, category = callback.data.split(":")
+    url = f"{API_URL}/agencies/{category}/"
+
+    resp = requests.get(url)
+    resp.raise_for_status()
+    global agencies_cache
+    agencies_cache = resp.json()
+
+    if not agencies_cache:
+        await callback.message.answer("📭 No agencies or SPA found", show_alert=True)
+        await callback.answer()
+        return
+
+    current = 0
+    a = agencies_cache[current]
+
+    text = format_agencyspa(a)
+    kb = get_agencyspa_keyboard(current, len(agencies_cache), a.get("id"))
+
+    if a.get("photos") and len(a["photos"]) > 0:
+        photo_url = a["photos"][0] 
+        photo = await preload_image({"main_photo": photo_url}, API_URL)
+        await callback.message.answer_photo(photo, caption=text, reply_markup=kb)
+    else:
+        await callback.message.answer(text, reply_markup=kb)
+
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("prev_agency"))
+async def prev_agency(callback: CallbackQuery):
+    _, current = callback.data.split(":")
+    current = int(current)
+    total = len(agencies_cache)
+
+    new_index = (current - 1) % total
+    a = agencies_cache[new_index]
+    text = format_agencyspa(a)
+    kb = get_agencyspa_keyboard(new_index, total, a.get("id"))
+
+    await update_agencyspa_message(callback, a, text, kb)
+
+
+@router.callback_query(F.data.startswith("next_agency"))
+async def next_agency(callback: CallbackQuery):
+    print("NEXT AGENCY")
+    _, current = callback.data.split(":")
+    current = int(current)
+    total = len(agencies_cache)
+
+    new_index = (current + 1) % total
+    a = agencies_cache[new_index]
+    text = format_agencyspa(a)
+    kb = get_agencyspa_keyboard(new_index, total, a.get("id"))
+
+    await update_agencyspa_message(callback, a, text, kb)
+
+
+async def update_agencyspa_message(callback: CallbackQuery, a, text, kb):
+    if a.get("photos") and len(a["photos"]) > 0:
+        photo_url = a["photos"][0]
+        photo = await preload_image({"main_photo": photo_url}, API_URL)
+        media = InputMediaPhoto(media=photo, caption=text)
+        await callback.message.edit_media(media=media, reply_markup=kb)
+    else:
+        try:
+            await callback.message.edit_caption(caption=text, reply_markup=kb)
+        except:
+            await callback.message.edit_text(text, reply_markup=kb)
+
+    await callback.answer()
+
+@router.callback_query(F.data == "noop")
+async def noop(callback: CallbackQuery):
+    await callback.answer()

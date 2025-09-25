@@ -1,6 +1,9 @@
 from aiogram.fsm.state import State, StatesGroup
 
 class CreateMaster(StatesGroup):
+  agency_type = State()
+  agency_id = State()
+  type = State()
   name = State()
   age = State()
   phonenumber = State()
@@ -18,3 +21,9 @@ class EditMaster(StatesGroup):
   view = State()
   field = State()  
   value = State()
+
+class CreateAgencySpa(StatesGroup):
+  name = State()
+  phone = State()
+  address = State()
+  photos = State()
