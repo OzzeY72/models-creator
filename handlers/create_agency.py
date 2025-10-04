@@ -82,7 +82,7 @@ async def process_agency_photo(message: Message, state: FSMContext, bot: Bot):
     }
 
     with open(tmp.name, "rb") as f:
-        files = {"files": f}
+        files = {"files": [f]}
         resp = requests.post(f"{API_URL}/agencies/", data=payload, files=files, headers=headers)
 
     if resp.status_code in (200, 201):

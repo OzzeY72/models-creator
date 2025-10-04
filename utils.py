@@ -1,12 +1,13 @@
 import requests, tempfile
 from aiogram.types import FSInputFile
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
 API_URL = os.getenv("API_URL")
+API_URL_HTTPS = os.getenv("API_URL_HTTPS")
 
 def format_master(m: dict) -> str:
   return (
@@ -15,7 +16,7 @@ def format_master(m: dict) -> str:
     f"🏠 Address: {m['address']}\n\n"
     f"📐 Parameters:\n"
     f"   Height: {m['height']} cm | Weight: {m['weight']} kg\n"
-    f"   Cup: {m['cupsize']} | Cloth size: {m['clothsize']}\n\n"
+    f"   Cup: {m['cupsize']} | Body type: {m['bodytype']}\n\n"
     f"💰 Prices:\n"
     f"   1 hour: {m['price_1h']} $\n"
     f"   2 hours: {m['price_2h']} $\n"
@@ -39,6 +40,10 @@ def format_application(app: dict) -> str:
 def get_agency_keyboard(current: int, total: int, agency_id: str) -> InlineKeyboardMarkup:
   return InlineKeyboardMarkup(
       inline_keyboard=[
+          [InlineKeyboardButton(
+            text="📷 Show Photos",
+            web_app=WebAppInfo(url=f"{API_URL_HTTPS}/agencies_view/{agency_id}")
+          )],
           [
               InlineKeyboardButton(text="⬅️", callback_data=f"agency_prev:{current}"),
               InlineKeyboardButton(text=f"{current+1}/{total}", callback_data="noop"),
@@ -53,11 +58,15 @@ def get_agency_keyboard(current: int, total: int, agency_id: str) -> InlineKeybo
       ]
   )
 
-async def send_master_carousel(message, masters, state, index=0):
+async def send_master_carousel(message, masters, state, index=0, master_id=None):
     m = masters[index]
     text = format_master(m)
     
     kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="📷 Show Photos",
+            web_app=WebAppInfo(url=f"{API_URL_HTTPS}/masters_view/{m.get('id')}")
+        )],
         [
             InlineKeyboardButton(text="⬅️", callback_data=f"prev:{index}"),
             InlineKeyboardButton(text=f"{index+1}/{len(masters)}", callback_data="noop"),
@@ -68,7 +77,7 @@ async def send_master_carousel(message, masters, state, index=0):
         ]
     ])
 
-    if m.get("main_photo"):
+    if m.get("photos"):
         photo = await preload_image(m, API_URL)
         await message.answer_photo(photo, caption=text, reply_markup=kb)
     else:
@@ -84,10 +93,9 @@ async def send_agencies_carousel(message, agency_spa, state: FSMContext, total: 
 
     kb = get_agency_keyboard(index, total, agency.get("id"))
 
-    if agency.get("photos") and len(agency["photos"]) > 0:
-       photo_url = agency["photos"][0] 
-       photo = await preload_image({"main_photo": photo_url}, API_URL)
-       await message.answer_photo(photo, caption=text, reply_markup=kb)
+    if agency.get("photos"):
+        photo = await preload_image(agency, API_URL)
+        await message.answer_photo(photo, caption=text, reply_markup=kb)
     else:
         await message.answer(text, reply_markup=kb)
 
@@ -119,33 +127,28 @@ async def send_applications_carousel(message, applications, state: FSMContext, i
 
     kb = get_application_keyboard(index, len(applications), app.get("id"))
 
-    if app.get("main_photo"): 
+    if app.get("photos"):
         photo = await preload_image(app, API_URL)
         await message.answer_photo(photo, caption=text, reply_markup=kb)
-    elif app.get("photos") and len(app["photos"]) > 0:
-       photo_url = app["photos"][0] 
-       photo = await preload_image({"main_photo": photo_url}, API_URL)
-       await message.answer_photo(photo, caption=text, reply_markup=kb)
     else:
         await message.answer(text, reply_markup=kb)
 
 async def preload_image(m, API_URL) :
-    if m.get("main_photo"):
-      try:
-        photo_resp = requests.get(f"{API_URL}/static/{m['main_photo']}", stream=True)
-        photo_resp.raise_for_status()
+  if m.get("photos"):
+    try:
+      photo_resp = requests.get(f"{API_URL}/static/{m['photos'][0]}", stream=True)
+      photo_resp.raise_for_status()
 
-        if "image" not in photo_resp.headers.get("content-type", ""):
-          print(f"⚠️ Not an image URL")
+      if "image" not in photo_resp.headers.get("content-type", ""):
+        print(f"⚠️ Not an image URL")
 
-        # временный файл
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-          for chunk in photo_resp.iter_content(1024):
-            tmp.write(chunk)
-          tmp_path = tmp.name
+      with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+        for chunk in photo_resp.iter_content(1024):
+          tmp.write(chunk)
+        tmp_path = tmp.name
 
-        photo = FSInputFile(tmp_path)
-        return photo
+      photo = FSInputFile(tmp_path)
+      return photo
 
-      except Exception as e:
-        print(f"⚠️ Could not load photo: {e}")
+    except Exception as e:
+      print(f"⚠️ Could not load photo: {e}")

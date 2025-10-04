@@ -11,7 +11,7 @@ class CreateMaster(StatesGroup):
   height = State()
   weight = State()
   cupsize = State()
-  clothsize = State()
+  bodytype = State()
   price_1h = State()
   price_2h = State()
   price_full_day = State()

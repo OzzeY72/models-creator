@@ -60,6 +60,15 @@ async def choose_model_type(message: Message, state: FSMContext):
     ])
     await message.answer("Choose an option:", reply_markup=kb)
 
+async def choose_model_body_type(message: Message, state: FSMContext):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Skinny", callback_data="body_type:Skinny")],
+        [InlineKeyboardButton(text="Slim", callback_data="body_type:Slim")],
+        [InlineKeyboardButton(text="Athletic", callback_data="body_type:Athletic")],
+        [InlineKeyboardButton(text="Curvy", callback_data="body_type:Curvy")]
+    ])
+    await message.answer("Choose body type:", reply_markup=kb)
+
 # 2️⃣ Старт процесса
 @router.message(F.text == "➕ Add model")
 async def start_create_master(message: Message, state: FSMContext):
@@ -76,7 +85,7 @@ async def start_create_master_in_agency(callback: CallbackQuery, state: FSMConte
     await callback.answer()
 
 async def update_agency_message(callback: CallbackQuery, agency, text, kb, new_index):
-    if agency.get("main_photo"):
+    if agency.get("photos"):
       photo = await preload_image(agency, API_URL)
       media = InputMediaPhoto(media=photo, caption=text)
       await callback.message.edit_media(media=media, reply_markup=kb)
@@ -184,14 +193,15 @@ async def process_weight(message: Message, state: FSMContext):
 @router.message(CreateMaster.cupsize)
 async def process_cupsize(message: Message, state: FSMContext):
     await state.update_data(cupsize=int(message.text))
-    await state.set_state(CreateMaster.clothsize)
-    await message.answer("Enter cloth size:")
+    await state.set_state(CreateMaster.bodytype)
+    await choose_model_body_type(message, state)
 
-@router.message(CreateMaster.clothsize)
-async def process_clothsize(message: Message, state: FSMContext):
-    await state.update_data(clothsize=int(message.text))
+@router.message(F.data.startswith("body_type"))
+async def process_bodytype(callback: CallbackQuery, state: FSMContext):
+    _, body_type = callback.data.split(":")
+    await state.update_data(body_type=body_type)
     await state.set_state(CreateMaster.price_1h)
-    await message.answer("Enter price for 1 hour:")
+    await callback.message.answer("Enter price for 1 hour:")
 
 @router.message(CreateMaster.price_1h)
 async def process_price_1h(message: Message, state: FSMContext):
@@ -230,11 +240,11 @@ async def process_photo(message: Message, state: FSMContext, bot: Bot):
         "height": str(data["height"]),
         "weight": str(data["weight"]),
         "cupsize": str(data["cupsize"]),
-        "clothsize": str(data["clothsize"]),
+        "bodytype": str(data["bodytype"]),
         "price_1h": str(data["price_1h"]),
         "price_2h": str(data["price_2h"]),
         "price_full_day": str(data["price_full_day"]),
-        "main_photo": "default.png",
+        "photos": [],
         "is_top": str(data["type"] == "top")
     }
     
@@ -246,7 +256,7 @@ async def process_photo(message: Message, state: FSMContext, bot: Bot):
         url += f"masters/"
 
     with open(tmp.name, "rb") as f:
-        files = {"file": f}
+        files = {"files": [f]}
         resp = requests.post(url, data=payload, files=files, headers=headers)
 
     if resp.status_code in (200, 201):

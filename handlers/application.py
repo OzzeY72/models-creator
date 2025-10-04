@@ -46,15 +46,10 @@ async def show_apps(callback: CallbackQuery, state: FSMContext):
     await send_applications_carousel(callback.message, apps["applications"], state, index=0)
 
 async def update_application_message(callback: CallbackQuery, app, text, kb, new_index):
-    if app.get("main_photo"): 
+    if app.get("photos"): 
         photo = await preload_image(app, API_URL)
         media = InputMediaPhoto(media=photo, caption=text)
         await callback.message.edit_media(media=media, reply_markup=kb)
-    elif app.get("photos"):
-       photo_url = app["photos"] 
-       photo = await preload_image({"main_photo": photo_url}, API_URL)
-       media = InputMediaPhoto(media=photo, caption=text)
-       await callback.message.edit_media(media=media, reply_markup=kb)
     else:
         await callback.message.edit_caption(text, reply_markup=kb)
 

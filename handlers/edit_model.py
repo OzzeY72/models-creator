@@ -22,9 +22,9 @@ def get_edit_keyboard(master_id: int) -> InlineKeyboardMarkup:
     buttons = [
       ("Name", "name"), ("Age", "age"), ("Phone", "phonenumber"),
       ("Address", "address"), ("Height", "height"), ("Weight", "weight"),
-      ("Cup", "cupsize"), ("Cloth size", "clothsize"),
+      ("Cup", "cupsize"), ("Body type", "bodytype"),
       ("Price 1h", "price_1h"), ("Price 2h", "price_2h"),
-      ("Full day", "price_full_day"), ("Photo", "main_photo")
+      ("Full day", "price_full_day"), ("Photo", "photos")
     ]
 
     inline_keyboard = []
@@ -52,11 +52,11 @@ async def show_edit_master(target, master_id: int, state: FSMContext):
 
     await state.set_state(EditMaster.field)
 
-    if m.get("main_photo"):
-      photo = await preload_image(m, API_URL)
-      await target.answer_photo(photo, caption=text, reply_markup=kb)
+    if m.get("photos"):
+        photo = await preload_image(m, API_URL)
+        await target.answer_photo(photo, caption=text, reply_markup=kb)
     else:
-      await target.answer(text, reply_markup=kb)
+        await target.answer(text, reply_markup=kb)
 
 @router.callback_query(F.data.startswith("edit:"))
 async def edit_master(callback: CallbackQuery, state: FSMContext):
@@ -71,7 +71,7 @@ async def edit_master_callback(callback: CallbackQuery, state: FSMContext):
 
   if field == "photo":
     await state.set_state(EditMaster.value)
-    await callback.message.answer("Send new photo:")
+    await callback.message.answer("Send new photos:")
   else:
     await state.set_state(EditMaster.value)
     await callback.message.answer(f"Enter new value for {field}:")
@@ -86,20 +86,19 @@ async def process_edit_value(message: Message, state: FSMContext, bot: Bot):
     field = data["field"]
     m = data["m"]
 
-    if field == "main_photo":
-      photo = message.photo[-1]
-      file = await bot.get_file(photo.file_id)
-      tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-      await bot.download_file(file.file_path, destination=tmp.name)
-      tmp.close()
-      with open(tmp.name, "rb") as f:
-        m["main_photo"] = f"{master_id}.jpg"
-        files = {"file": f}
-        resp = requests.post(f"{API_URL}/masters/{master_id}/upload_photo", files=files, headers=headers)
-        if resp.status_code == 200:
-          print("✅ Model created successfully!")
-        else:
-          print(f"❌ Error uploading photo: {resp.text}")
+    if field == "photos":
+       pass
+        # photos = message.photo if isinstance(message.photo, list) else [message.photo]
+        # files = []
+
+        # for photo in photos:
+        #     file_info = await bot.get_file(photo.file_id)
+        #     tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+        #     await bot.download_file(file_info.file_path, destination=tmp.name)
+        #     tmp.close()
+        #     f = open(tmp.name, "rb")
+        #     files.append(("files", (f"{photo.file_id}.jpg", f, "image/jpeg")))
+        # resp = requests.put(f"{API_URL}/masters/{master_id}", json=m, headers=headers, files=files)
     else:
       m[field] = message.text
       resp = requests.put(f"{API_URL}/masters/{master_id}", json=m, headers=headers)

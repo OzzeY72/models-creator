@@ -1,6 +1,6 @@
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InputMediaPhoto, FSInputFile
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import CallbackQuery, InputMediaPhoto
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 import requests, tempfile
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from dotenv import load_dotenv
@@ -11,6 +11,7 @@ from utils import format_master, preload_image
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 API_URL = os.getenv("API_URL")
+API_URL_HTTPS = os.getenv("API_URL_HTTPS")
 
 router = Router()
 models_cache = []
@@ -18,6 +19,10 @@ models_cache = []
 def get_master_keyboard(current: int, total: int, master_id: str) -> InlineKeyboardMarkup:
   return InlineKeyboardMarkup(
     inline_keyboard=[
+       [InlineKeyboardButton(
+          text="📷 Show Photos",
+          web_app=WebAppInfo(url=f"{API_URL_HTTPS}/masters_view/{master_id}")
+      )],
       [
         InlineKeyboardButton(text="⬅️", callback_data=f"prev_models:{current}"),
         InlineKeyboardButton(text=f"{current+1}/{total}", callback_data="noop"),
@@ -82,7 +87,7 @@ async def list_models(callback: CallbackQuery):
     text = format_master(m)
     kb = get_master_keyboard(current, len(models_cache), m.get("id"))
 
-    if m.get("main_photo"):
+    if m.get("photos"):
         photo = await preload_image(m, API_URL)
         await callback.message.answer_photo(photo, caption=text, reply_markup=kb)
     else:
@@ -118,7 +123,7 @@ async def next_master(callback: CallbackQuery):
     await update_master_message(callback, m, text, kb, new_index)
 
 async def update_master_message(callback: CallbackQuery, m, text, kb, new_index):
-    if m.get("main_photo"):
+    if m.get("photos"):
       photo = await preload_image(m, API_URL)
       media = InputMediaPhoto(media=photo, caption=text)
       await callback.message.edit_media(media=media, reply_markup=kb)
