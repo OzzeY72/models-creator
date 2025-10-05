@@ -18,6 +18,11 @@ API_URL = os.getenv("API_URL")
 API_KEY = os.getenv("API_KEY")
 headers = {"X-API-Key": API_KEY}
 
+def send_button():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📤 Send", callback_data="send_edit_model_form")]
+    ])
+
 def get_edit_keyboard(master_id: int) -> InlineKeyboardMarkup:
     buttons = [
       ("Name", "name"), ("Age", "age"), ("Phone", "phonenumber"),
@@ -69,7 +74,7 @@ async def edit_master_callback(callback: CallbackQuery, state: FSMContext):
   _, master_id, field = callback.data.split(":")
   await state.update_data(field=field)
 
-  if field == "photo":
+  if field == "photos":
     await state.set_state(EditMaster.value)
     await callback.message.answer("Send new photos:")
   else:
@@ -81,27 +86,29 @@ async def edit_master_callback(callback: CallbackQuery, state: FSMContext):
 @router.message(EditMaster.value)
 async def process_edit_value(message: Message, state: FSMContext, bot: Bot):
     data = await state.get_data()
-    print(data)
     master_id = data["master_id"]
     field = data["field"]
     m = data["m"]
 
+    files = []
     if field == "photos":
-       pass
-        # photos = message.photo if isinstance(message.photo, list) else [message.photo]
-        # files = []
+      m["photos"] = []
 
-        # for photo in photos:
-        #     file_info = await bot.get_file(photo.file_id)
-        #     tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-        #     await bot.download_file(file_info.file_path, destination=tmp.name)
-        #     tmp.close()
-        #     f = open(tmp.name, "rb")
-        #     files.append(("files", (f"{photo.file_id}.jpg", f, "image/jpeg")))
-        # resp = requests.put(f"{API_URL}/masters/{master_id}", json=m, headers=headers, files=files)
+      photos = [message.photo[-1]]
+      tmp_files = []
+
+      for photo in photos:
+        file = await bot.get_file(photo.file_id)
+        tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+        await bot.download_file(file.file_path, destination=tmp.name)
+        tmp_files.append(tmp.name)
+        tmp.close()
+
+      files = [("files", (os.path.basename(path), open(path, "rb"), "image/jpeg")) for path in tmp_files]
     else:
       m[field] = message.text
-      resp = requests.put(f"{API_URL}/masters/{master_id}", json=m, headers=headers)
+
+    resp = requests.put(f"{API_URL}/masters/{master_id}", data=m, files=files, headers=headers)
 
     if resp.status_code in (200, 201):
       await state.set_state(EditMaster.view)

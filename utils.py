@@ -36,6 +36,23 @@ def format_application(app: dict) -> str:
         return format_master(app)
     else:  # значит spa/agency
         return format_agencyspa(app)
+    
+def get_masters_keyboard(index: int, total: int, master_id: str, prev_name, next_name) -> InlineKeyboardMarkup:
+  return InlineKeyboardMarkup(inline_keyboard=[
+      [InlineKeyboardButton(
+          text="📷 Show Photos",
+          web_app=WebAppInfo(url=f"{API_URL_HTTPS}/masters_view/{master_id}")
+      )],
+      [
+          InlineKeyboardButton(text="⬅️", callback_data=f"{prev_name}:{index}"),
+          InlineKeyboardButton(text=f"{index+1}/{total}", callback_data="noop"),
+          InlineKeyboardButton(text="➡️", callback_data=f"{next_name}:{index}")
+      ],
+      [InlineKeyboardButton(text="✏️ Edit", callback_data=f"edit:{master_id}")],
+      [
+          InlineKeyboardButton(text="Menu", callback_data="go_home")
+      ]
+  ])
 
 def get_agency_keyboard(current: int, total: int, agency_id: str) -> InlineKeyboardMarkup:
   return InlineKeyboardMarkup(
@@ -58,24 +75,11 @@ def get_agency_keyboard(current: int, total: int, agency_id: str) -> InlineKeybo
       ]
   )
 
-async def send_master_carousel(message, masters, state, index=0, master_id=None):
+async def send_master_carousel(message, masters, state, index=0, prev_name="prev", next_name="next"):
     m = masters[index]
     text = format_master(m)
     
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text="📷 Show Photos",
-            web_app=WebAppInfo(url=f"{API_URL_HTTPS}/masters_view/{m.get('id')}")
-        )],
-        [
-            InlineKeyboardButton(text="⬅️", callback_data=f"prev:{index}"),
-            InlineKeyboardButton(text=f"{index+1}/{len(masters)}", callback_data="noop"),
-            InlineKeyboardButton(text="➡️", callback_data=f"next:{index}")
-        ],
-        [
-            InlineKeyboardButton(text="Menu", callback_data="go_home")
-        ]
-    ])
+    kb = get_masters_keyboard(index, len(masters), m.get("id"), prev_name, next_name)
 
     if m.get("photos"):
         photo = await preload_image(m, API_URL)
@@ -102,6 +106,10 @@ async def send_agencies_carousel(message, agency_spa, state: FSMContext, total: 
 def get_application_keyboard(current: int, total: int, agency_id: str) -> InlineKeyboardMarkup:
   return InlineKeyboardMarkup(
         inline_keyboard=[
+           [InlineKeyboardButton(
+                text="📷 Show Photos",
+                web_app=WebAppInfo(url=f"{API_URL_HTTPS}/masters_view/{agency_id}")
+            )],
             [
                 InlineKeyboardButton(text="⬅️", callback_data=f"app_prev:{current}"),
                 InlineKeyboardButton(text=f"{current+1}/{total}", callback_data="noop"),

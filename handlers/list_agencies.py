@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from aiogram.fsm.context import FSMContext
 import os
 import tempfile
-from utils import format_agencyspa, format_master, preload_image, send_master_carousel
+from utils import format_agencyspa, format_master, get_masters_keyboard, preload_image, send_master_carousel
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -44,34 +44,56 @@ async def open_spa_agency(callback: CallbackQuery, state: FSMContext):
         return
 
     masters = resp.json()
+    global models_cache
+    models_cache = masters
+
     if not masters:
         await callback.answer("📭 No models found", show_alert=True)
         return
 
     # Сохраняем в state
     await state.update_data(search_results=masters)
-    await send_master_carousel(callback.message, masters, state, index=0)
+    await send_master_carousel(callback.message, masters, state, index=0, prev_name="prev_opened", next_name="next_opened")
     await callback.answer()
 
-# @router.callback_query(F.data.startswith("prev"))
-# async def prev(callback: CallbackQuery, state: FSMContext):
-#     _, current = callback.data.split(":")
-#     current = int(current)
-#     data = await state.get_data()
-#     masters = data["search_results"]
-#     new_index = (current - 1) % len(masters)
-#     await send_master_carousel(callback.message, masters, state, new_index)
-#     await callback.answer()
+async def update_master_message(callback: CallbackQuery, m, text, kb, new_index):
+    if m.get("photos"):
+      photo = await preload_image(m, API_URL)
+      media = InputMediaPhoto(media=photo, caption=text)
+      await callback.message.edit_media(media=media, reply_markup=kb)
+    else:
+      try:
+        await callback.message.edit_caption(caption=text, reply_markup=kb)
+      except:
+        await callback.message.edit_text(text, reply_markup=kb)
 
-# @router.callback_query(F.data.startswith("next"))
-# async def next(callback: CallbackQuery, state: FSMContext):
-#     _, current = callback.data.split(":")
-#     current = int(current)
-#     data = await state.get_data()
-#     masters = data["search_results"]
-#     new_index = (current + 1) % len(masters)
-#     await send_master_carousel(callback.message, masters, state, new_index)
-#     await callback.answer()
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("prev_opened"))
+async def prev(callback: CallbackQuery, state: FSMContext):
+    _, current = callback.data.split(":")
+    current = int(current)
+    total = len(models_cache)
+
+    new_index = (current - 1) % total
+    m = models_cache[new_index]
+    text = format_master(m)
+    kb = get_masters_keyboard(new_index, total, m.get("id"), prev_name="prev_opened", next_name="next_opened")
+
+    await update_master_message(callback, m, text, kb, new_index)
+
+@router.callback_query(F.data.startswith("next_opened"))
+async def next(callback: CallbackQuery, state: FSMContext):
+    _, current = callback.data.split(":")
+    current = int(current)
+    total = len(models_cache)
+
+    new_index = (current + 1) % total
+    m = models_cache[new_index]
+    text = format_master(m)
+    kb = get_masters_keyboard(new_index, total, m.get("id"), prev_name="prev_opened", next_name="next_opened")
+
+    await update_master_message(callback, m, text, kb, new_index)
 
 @router.callback_query(F.data.startswith("show_agencyspa"))
 async def list_agencyspa(callback: CallbackQuery):

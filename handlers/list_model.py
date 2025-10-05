@@ -28,6 +28,7 @@ def get_master_keyboard(current: int, total: int, master_id: str) -> InlineKeybo
         InlineKeyboardButton(text=f"{current+1}/{total}", callback_data="noop"),
         InlineKeyboardButton(text="➡️", callback_data=f"next_models:{current}")
       ],
+      [InlineKeyboardButton(text="✏️ Edit", callback_data=f"edit:{master_id}")],
       [
           InlineKeyboardButton(text="Menu", callback_data="go_home")
       ]

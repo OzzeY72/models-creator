@@ -45,6 +45,11 @@ async def get_agencies_spa(callback, agencies_type):
     return agencies
 
 
+def send_button():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📤 Send", callback_data="send_models_form")]
+    ])
+
 async def create_model_kb(message: Message, state: FSMContext):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👩 Escort", callback_data="create_model")],
@@ -81,7 +86,7 @@ async def start_create_master_in_agency(callback: CallbackQuery, state: FSMConte
     await state.set_state(CreateMaster.agency_id)
 
     agencies = await get_agencies_spa(callback, agency_type)
-    await send_agencies_carousel(callback.message, agencies, state, 0)
+    await send_agencies_carousel(callback.message, agencies, state, len(agencies), 0)
     await callback.answer()
 
 async def update_agency_message(callback: CallbackQuery, agency, text, kb, new_index):
@@ -196,12 +201,13 @@ async def process_cupsize(message: Message, state: FSMContext):
     await state.set_state(CreateMaster.bodytype)
     await choose_model_body_type(message, state)
 
-@router.message(F.data.startswith("body_type"))
+@router.callback_query(F.data.startswith("body_type"))
 async def process_bodytype(callback: CallbackQuery, state: FSMContext):
     _, body_type = callback.data.split(":")
-    await state.update_data(body_type=body_type)
+    await state.update_data(bodytype=body_type)
     await state.set_state(CreateMaster.price_1h)
     await callback.message.answer("Enter price for 1 hour:")
+    await callback.answer()
 
 @router.message(CreateMaster.price_1h)
 async def process_price_1h(message: Message, state: FSMContext):
@@ -218,20 +224,43 @@ async def process_price_2h(message: Message, state: FSMContext):
 @router.message(CreateMaster.price_full_day)
 async def process_price_day(message: Message, state: FSMContext):
     await state.update_data(price_full_day=float(message.text))
+    await state.set_state(CreateMaster.description)
+    await message.answer("Enter a brief description of the model:")
+
+@router.message(CreateMaster.description)
+async def process_description(message: Message, state: FSMContext):
+    await state.update_data(description=message.text)
     await state.set_state(CreateMaster.photo)
-    await message.answer("Now send the main photo of the model:")
+    await message.answer(
+        "Now send photos one by one.\nWhen done, click 📤 Send below.",
+        reply_markup=send_button()
+    )
 
 # 4️⃣ Получение фото и сохранение модели
 @router.message(CreateMaster.photo, F.content_type == "photo")
 async def process_photo(message: Message, state: FSMContext, bot: Bot):
     data = await state.get_data()
-    photo = message.photo[-1]  # самый большой размер
+    photos = data.get("photos", [])
 
+    photo = message.photo[-1]
     file = await bot.get_file(photo.file_id)
     tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
     await bot.download_file(file.file_path, destination=tmp.name)
     tmp.close()
-    
+
+    photos.append(tmp.name)
+    await state.update_data(photos=photos)
+
+@router.callback_query(F.data == "send_models_form")
+async def send_models_form(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    photos = data.get("photos", [])
+
+    if not photos:
+        await callback.message.answer("⚠️ You need to send at least one photo!")
+        await callback.answer()
+        return
+
     payload = {
         "name": data["name"],
         "age": str(data["age"]),
@@ -244,25 +273,32 @@ async def process_photo(message: Message, state: FSMContext, bot: Bot):
         "price_1h": str(data["price_1h"]),
         "price_2h": str(data["price_2h"]),
         "price_full_day": str(data["price_full_day"]),
-        "photos": [],
-        "is_top": str(data["type"] == "top")
+        "description": data.get("description", ""),
+        "is_top": str(data["type"] == "top"),
     }
-    
-    url = f"{API_URL}/"
 
+    files = [("files", (os.path.basename(p), open(p, "rb"), "image/jpeg")) for p in photos]
+
+    url = f"{API_URL}/"
     if "agency_id" in data:
         url += f"agencies/{data['agency_id']}/masters/"
     else:
         url += f"masters/"
 
-    with open(tmp.name, "rb") as f:
-        files = {"files": [f]}
+    files = [("files", (os.path.basename(p), open(p, "rb"), "image/jpeg")) for p in photos]
+   
+    try:
         resp = requests.post(url, data=payload, files=files, headers=headers)
 
-    if resp.status_code in (200, 201):
-        await message.answer("✅ Model created successfully!")
-    else:
-        await message.answer(f"❌ Error creating model: {resp.text}")
+        if resp.status_code in (200, 201):
+            await callback.message.answer("✅ Model created successfully!")
+        else:
+            await callback.message.answer(f"❌ Error creating model: {resp.text}")
+    finally:
+        await state.clear()
+        await callback.answer()
 
-    os.remove(tmp.name)
+        for p in photos:
+            os.remove(p)
+            
     await state.clear()
